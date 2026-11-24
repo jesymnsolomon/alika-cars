@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import RangeCalendar, { countDays } from './components/RangeCalendar.jsx'
+import RangeCalendar, { countDays, toISODate } from './components/RangeCalendar.jsx'
 import { BUSINESS, WEB3FORMS_KEY } from './config.js'
 
 const PURPOSES = ['Baguio tour', 'Family trip', 'Out-of-town travel', 'Airport / terminal pickup', 'Business', 'Event or wedding', 'Other']
@@ -18,9 +18,10 @@ async function postWithTimeout(url, data, ms = 10000) {
       signal: controller.signal,
     })
     const json = await res.json().catch(() => ({}))
-    return res.ok && (json.success === true || json.ok === true)
-  } catch {
-    return false
+    const ok = res.ok && (json.success === true || json.ok === true)
+    return { ok, error: ok ? '' : `${res.status}: ${json.message || json.error || 'no details'}` }
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'timed out' : err.message }
   } finally {
     clearTimeout(timer)
   }
@@ -86,7 +87,8 @@ export default function App() {
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState('idle') // idle | sending | done
   const [emailSent, setEmailSent] = useState(false)
-  const [smsSent, setSmsSent] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [problems, setProblems] = useState([])
   const [message, setMessage] = useState('')
   const topRef = useRef(null)
 
@@ -146,8 +148,9 @@ export default function App() {
       botcheck: form.botcheck,
     }
 
-    // Email (Web3Forms) and text (our /api/sms) go out at the same time.
-    const [emailOk, smsOk] = await Promise.all([
+    // The booking is saved for the admin dashboard and emailed at the same time.
+    if (!WEB3FORMS_KEY) console.error('VITE_WEB3FORMS_KEY is missing from this build. Add it in Vercel and redeploy.')
+    const [email, stored] = await Promise.all([
       postWithTimeout('https://api.web3forms.com/submit', {
         access_key: WEB3FORMS_KEY,
         subject: `New booking: ${fields.name} (${fields.start} to ${fields.end})`,
@@ -163,12 +166,19 @@ export default function App() {
         Purpose: fields.purpose,
         'Travel details': fields.details,
       }),
-      postWithTimeout('/api/sms', fields),
+      postWithTimeout('/api/bookings', {
+        ...fields,
+        purposes: form.purposes,
+        startISO: toISODate(start),
+        endISO: toISODate(end),
+      }),
     ])
 
-    setSmsSent(smsOk)
-    const ok = emailOk
-    setEmailSent(ok)
+    if (!email.ok) console.error('Email (Web3Forms) failed:', email.error)
+    if (!stored.ok) console.error('Saving the booking failed:', stored.error)
+    setProblems([!email.ok && `Email: ${WEB3FORMS_KEY ? email.error : 'Web3Forms key missing'}`, !stored.ok && `Save: ${stored.error}`].filter(Boolean))
+    setSaved(stored.ok)
+    setEmailSent(email.ok)
     setStatus('done')
     topRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -186,7 +196,7 @@ export default function App() {
 
   return (
     <div ref={topRef} className="min-h-dvh">
-      <header className="px-5 pb-8 pt-6 text-center text-white sm:pb-10 sm:pt-8">
+      <header className="px-5 pb-8 pt-6 text-center text-white sm:pb-10 sm:pt-8" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
         <img src="/alika-logo.png" alt="Alika Car Rentals and Baguio Tours" className="mx-auto h-52 w-52 object-cover sm:h-64 sm:w-64" />
         <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Book your ride</h1>
         <p className="mx-auto mt-1 max-w-md text-sm text-white/85 sm:text-base">Lika, sakay na! Pick your dates, tell us about your trip, and we will get back to you.</p>
@@ -195,7 +205,7 @@ export default function App() {
 
       <main className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
         {status === 'done' ? (
-          <SuccessScreen emailSent={emailSent} smsSent={smsSent} message={message} onReset={reset} />
+          <SuccessScreen emailSent={emailSent} saved={saved} problems={problems} message={message} onReset={reset} />
         ) : (
           <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {/* Hidden from people; bots that fill it are ignored. */}
@@ -285,9 +295,9 @@ export default function App() {
   )
 }
 
-function SuccessScreen({ emailSent, smsSent, message, onReset }) {
+function SuccessScreen({ emailSent, saved, problems, message, onReset }) {
   const whatsapp = `https://wa.me/${BUSINESS.phone.replace('+', '')}?text=${encodeURIComponent(message)}`
-  const delivered = emailSent || smsSent
+  const delivered = emailSent || saved
   return (
     <div className="mx-auto max-w-lg rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-stone-200 sm:p-8">
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand">
@@ -315,6 +325,10 @@ function SuccessScreen({ emailSent, smsSent, message, onReset }) {
         <summary className="cursor-pointer text-sm font-medium text-stone-600">See your booking details</summary>
         <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-stone-50 p-4 font-sans text-sm text-stone-700">{message}</pre>
       </details>
+
+      {problems.length > 0 && (
+        <p className="mt-4 text-left text-xs text-stone-400">Technical details: {problems.join(' · ')}</p>
+      )}
 
       <button type="button" onClick={onReset} className="mt-6 min-h-11 text-sm font-medium text-brand underline-offset-2 hover:underline">
         Make another booking

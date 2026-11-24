@@ -1,37 +1,39 @@
-# Alika Cars – Booking Page
+# Alika Cars – Booking Page & Admin
 
-React + Tailwind (Vite), hosted on Vercel: https://alika-cars.vercel.app/
+React + Tailwind (Vite), hosted on Vercel.
+
+- **Customers:** https://alika-cars.vercel.app/
+- **Admin dashboard:** https://alika-cars.vercel.app/admin
+
+## How bookings flow
+
+1. A customer fills in the booking form.
+2. The booking is **saved to the database** (Upstash Redis) so it shows in the admin dashboard, and **emailed** to alikacars.baguio@gmail.com through Web3Forms.
+3. In `/admin`, the owner sees every booking on a calendar and in a list, can **Call** or **Text** the customer, change the status (New → Confirmed → Done, or Cancelled), add private notes, and delete bookings.
+
+## One-time setup in Vercel
+
+1. **Database:** Vercel > your project > **Storage** > **Create Database** > choose **Upstash for Redis** (free plan) > connect it to this project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
+2. **Environment variables** (Settings > Environment Variables, tick Production):
+   - `ADMIN_PASSWORD` = the password for /admin
+   - `VITE_WEB3FORMS_KEY` = the Web3Forms access key
+3. **Redeploy** (Deployments > ⋯ > Redeploy).
+4. Check https://alika-cars.vercel.app/api/status: everything should say `true`.
+
+## Add to iPhone home screen
+
+1. Open the page in **Safari** (the booking page, or `/admin` for the dashboard).
+2. Tap **Share** → **Add to Home Screen** → **Add**.
+
+The booking page installs as **Alika Cars**; the dashboard installs as **Alika Admin** with its own icon. They open full screen like apps.
 
 ## Run locally
 
 ```bash
 npm install
-npm run dev
+npm run dev        # the pages only; API calls won't work
+npx vercel dev     # pages + API (needs `vercel link` and a .env, see .env.example)
 ```
-
-Note: `npm run dev` does not run the `/api/sms` function. To test texts locally use `npx vercel dev`, or just test on the live site.
-
-## How bookings are delivered
-
-Each booking goes out two ways at the same time:
-
-1. **Email** via [Web3Forms](https://web3forms.com) to alikacars.baguio@gmail.com
-2. **Text message** via [Semaphore](https://semaphore.co) to 0929 180 5772, sent by `api/sms.js` (a Vercel function, so the key stays secret)
-
-If both fail, the customer gets one-tap buttons to text or WhatsApp the booking instead.
-
-## Setup (one time)
-
-1. **Web3Forms:** go to web3forms.com, enter alikacars.baguio@gmail.com, and copy the access key they email you.
-2. **Semaphore:** sign up at semaphore.co, buy credits, and copy your API key from Account > API.
-3. In **Vercel > Project > Settings > Environment Variables**, add:
-   - `VITE_WEB3FORMS_KEY` = the Web3Forms access key
-   - `SEMAPHORE_API_KEY` = the Semaphore API key
-   - optional `SEMAPHORE_SENDER_NAME` = an approved sender name (e.g. ALIKA)
-   - optional `ALIKA_SMS_TO` = the phone that receives texts (default 09291805772)
-4. **Redeploy** (Deployments > ... > Redeploy) so the new variables take effect.
-
-For local testing, copy `.env.example` to `.env` and fill in the same values.
 
 ## QR codes
 

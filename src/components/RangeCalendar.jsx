@@ -12,6 +12,12 @@ export function sameDay(a, b) {
   return a && b && a.getTime() === b.getTime()
 }
 
+// "2026-11-28" in local time (toISOString would shift the day in the Philippines).
+export function toISODate(d) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 export function countDays(start, end) {
   if (!start || !end) return 0
   return Math.round((end - start) / 86400000) + 1
