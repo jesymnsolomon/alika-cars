@@ -25,3 +25,12 @@ export const timeAgo = (isoDateTime) => {
   if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`
   return new Date(isoDateTime).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+export const monthDay = (iso) => parseISO(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+
+export const rangeText = (b) => (b.start === b.end ? shortDate(b.start) : `${monthDay(b.start)} – ${monthDay(b.end)}`)
+
+export const greeting = () => {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}

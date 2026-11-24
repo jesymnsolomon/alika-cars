@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import AdminApp from './admin/AdminApp.jsx'
 
+document.body.style.backgroundColor = '#f4f1ee'
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AdminApp />

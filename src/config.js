@@ -4,6 +4,9 @@ export const BUSINESS = {
   email: 'alikacars.baguio@gmail.com',
   phone: '+639291805772',
   phoneDisplay: '0929 180 5772',
+  ownerName: 'Ian',
+  // Suggestions for the Vehicle field in the admin. Add or rename cars here.
+  fleet: ['Vios', 'Van'],
 }
 
 // Web3Forms access key (safe to be public; it only lets people send to your inbox).

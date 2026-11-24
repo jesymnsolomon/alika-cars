@@ -9,6 +9,7 @@ import { notifyAdmins } from './_push.js'
 
 const KEY = 'bookings'
 const STATUSES = ['new', 'confirmed', 'completed', 'cancelled']
+const VEHICLE_STATUSES = ['waiting', 'out', 'returned', 'unwashed']
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 const clean = (value, max) => String(value ?? '').trim().slice(0, max)
@@ -50,6 +51,11 @@ export default async function handler(req, res) {
         booking.status = body.status
       }
       if (body.notes !== undefined) booking.notes = clean(body.notes, 2000)
+      if (body.vehicle !== undefined) booking.vehicle = clean(body.vehicle, 40)
+      if (body.vehicleStatus !== undefined) {
+        if (!VEHICLE_STATUSES.includes(body.vehicleStatus)) return res.status(400).json({ ok: false, error: 'Unknown vehicle status.' })
+        booking.vehicleStatus = body.vehicleStatus
+      }
       booking.updatedAt = new Date().toISOString()
       await redis('HSET', KEY, id, JSON.stringify(booking))
       return res.status(200).json({ ok: true, booking })
@@ -94,6 +100,8 @@ async function create(req, res) {
     start: clean(body.startISO, 10),
     end: clean(body.endISO, 10),
     notes: '',
+    distanceKm: Number.isFinite(Number(body.distanceKm)) ? Math.max(0, Math.min(2000, Math.round(Number(body.distanceKm)))) : null,
+    driveHours: Number.isFinite(Number(body.driveHours)) ? Math.max(0, Math.min(48, Number(body.driveHours))) : null,
   }
 
   const digits = booking.contact.replace(/\D/g, '')

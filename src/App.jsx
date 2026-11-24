@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import RangeCalendar, { countDays, toISODate } from './components/RangeCalendar.jsx'
 import { BUSINESS, WEB3FORMS_KEY } from './config.js'
+import { OTHER_PLACE, PLACES, describeDistance, distanceFromBaguio } from './data/places.js'
 
 const PURPOSES = ['Baguio tour', 'Family trip', 'Out-of-town travel', 'Airport / terminal pickup', 'Business', 'Event or wedding', 'Other']
 
@@ -37,7 +38,7 @@ function buildMessage({ start, end, form }) {
     '',
     `Dates: ${formatDate(start)} to ${formatDate(end)} (${days} day${days > 1 ? 's' : ''})`,
     `Name: ${form.fullName.trim()}`,
-    `City: ${form.city.trim()}`,
+    `Going to: ${form.city}${distanceFromBaguio(form.city) ? ` (${describeDistance(distanceFromBaguio(form.city))})` : ''}`,
     `Contact: ${form.contact.trim()}`,
     `Passengers: ${form.passengers}`,
     `Purpose: ${form.purposes.join(', ')}`,
@@ -110,7 +111,7 @@ export default function App() {
     const e = {}
     if (!start || !end) e.dates = start ? 'Now tap your return date.' : 'Please pick your start and end dates.'
     if (form.fullName.trim().length < 2) e.fullName = 'Please enter your full name.'
-    if (!form.city.trim()) e.city = 'Please enter your city.'
+    if (!form.city) e.city = 'Please choose where you are going.'
     const digits = form.contact.replace(/\D/g, '')
     if (digits.length < 10 || digits.length > 13) e.contact = 'Please enter a valid mobile number, like 0917 123 4567.'
     if (!form.passengers || form.passengers < 1) e.passengers = 'At least 1 passenger.'
@@ -147,6 +148,7 @@ export default function App() {
       details: form.details.trim(),
       botcheck: form.botcheck,
     }
+    const trip = distanceFromBaguio(form.city)
 
     // The booking is saved for the admin dashboard and emailed at the same time.
     if (!WEB3FORMS_KEY) console.error('VITE_WEB3FORMS_KEY is missing from this build. Add it in Vercel and redeploy.')
@@ -157,7 +159,8 @@ export default function App() {
         from_name: 'Alika Booking Page',
         botcheck: fields.botcheck,
         Name: fields.name,
-        City: fields.city,
+        'Going to': fields.city,
+        Distance: trip ? describeDistance(trip) : 'Not listed',
         Contact: fields.contact,
         'Start date': fields.start,
         'End date': fields.end,
@@ -169,6 +172,8 @@ export default function App() {
       postWithTimeout('/api/bookings', {
         ...fields,
         purposes: form.purposes,
+        distanceKm: trip?.km,
+        driveHours: trip?.hours,
         startISO: toISODate(start),
         endISO: toISODate(end),
       }),
@@ -193,6 +198,7 @@ export default function App() {
   }
 
   const days = countDays(start, end)
+  const distance = distanceFromBaguio(form.city)
 
   return (
     <div ref={topRef} className="min-h-dvh">
@@ -235,8 +241,27 @@ export default function App() {
                   <Field label="Full name" htmlFor="fullName" error={errors.fullName}>
                     <input id="fullName" required type="text" autoComplete="name" placeholder="Juan Dela Cruz" value={form.fullName} onChange={(e) => update('fullName', e.target.value)} className={inputClass(errors.fullName)} />
                   </Field>
-                  <Field label="City" htmlFor="city" error={errors.city} hint="Where you are coming from">
-                    <input id="city" required type="text" autoComplete="address-level2" placeholder="e.g. Quezon City" value={form.city} onChange={(e) => update('city', e.target.value)} className={inputClass(errors.city)} />
+                  <Field label="Where are you going?" htmlFor="city" error={errors.city}>
+                    <div className="relative">
+                      <select id="city" required value={form.city} onChange={(e) => update('city', e.target.value)} className={`${inputClass(errors.city)} appearance-none pr-11 ${form.city ? '' : 'text-stone-400'}`}>
+                        <option value="" disabled>Choose a city or province</option>
+                        {PLACES.map((group) => (
+                          <optgroup key={group.region} label={group.region}>
+                            {group.items.map(([name]) => (
+                              <option key={name} value={name}>{name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                        <option value={OTHER_PLACE}>{OTHER_PLACE} (tell us below)</option>
+                      </select>
+                      <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                    </div>
+                    {distance && (
+                      <p className="mt-2 flex items-center gap-2 rounded-xl bg-brand-soft px-3 py-2 text-sm font-medium text-brand" aria-live="polite">
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z" /><circle cx="12" cy="9" r="2.5" /></svg>
+                        <span>{describeDistance(distance)} <span className="font-normal text-brand/70">(estimate)</span></span>
+                      </p>
+                    )}
                   </Field>
                   <Field label="Contact number" htmlFor="contact" error={errors.contact}>
                     <input id="contact" required type="tel" inputMode="tel" autoComplete="tel" placeholder="0917 123 4567" value={form.contact} onChange={(e) => update('contact', e.target.value)} className={inputClass(errors.contact)} />
@@ -306,7 +331,7 @@ function SuccessScreen({ emailSent, saved, problems, message, onReset }) {
       <h2 className="mt-4 text-2xl font-bold text-brand-ink">{delivered ? 'Booking request sent!' : 'One last step'}</h2>
       <p className="mt-2 text-stone-600">
         {delivered
-          ? `Salamat! We received your request and will contact you at the number you gave us soon.`
+          ? 'Salamat! Please wait for a call or message from us at the number you gave. It may take a few minutes or hours. Thank you for patiently waiting!'
           : 'We could not send your request right now. Please send it to us with one tap below.'}
       </p>
 
