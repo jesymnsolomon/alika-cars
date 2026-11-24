@@ -312,8 +312,7 @@ export default function App() {
         )}
 
         <footer className="mt-10 text-center text-sm text-white/80">
-          <p>Questions? Call or text <a href={`tel:${BUSINESS.phone}`} className="font-semibold text-white underline underline-offset-2">{BUSINESS.phoneDisplay}</a></p>
-          <p className="mt-1">© {new Date().getFullYear()} {BUSINESS.name}</p>
+          <p>© {new Date().getFullYear()} {BUSINESS.name}</p>
         </footer>
       </main>
     </div>
