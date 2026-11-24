@@ -1,22 +1,40 @@
 # Alika Cars – Booking Page
 
-React + Tailwind (Vite). Opens straight to the booking form.
+React + Tailwind (Vite), hosted on Vercel: https://alika-cars.vercel.app/
 
-## Run it
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the link it prints. Because of `--host`, it also prints a Network link you can open on your phone (same Wi-Fi) to test on mobile.
+Note: `npm run dev` does not run the `/api/sms` function. To test texts locally use `npx vercel dev`, or just test on the live site.
 
-Build for hosting: `npm run build` → upload the `dist` folder (Netlify, Vercel, Hostinger, etc.).
+## How bookings are delivered
 
-## How requests are delivered
+Each booking goes out two ways at the same time:
 
-1. **Email** (automatic): sent to alikacars.baguio@gmail.com through FormSubmit (free, no account).
-   - The FIRST time someone submits, FormSubmit sends an **activation email** to that inbox. Click "Activate Form" once; after that every booking arrives by email.
-2. **Phone** (one tap): after submitting, the customer sees buttons that open their Messages app or WhatsApp with the booking already typed and addressed to +63 929 180 5772. They just press Send.
+1. **Email** via [Web3Forms](https://web3forms.com) to alikacars.baguio@gmail.com
+2. **Text message** via [Semaphore](https://semaphore.co) to 0929 180 5772, sent by `api/sms.js` (a Vercel function, so the key stays secret)
+
+If both fail, the customer gets one-tap buttons to text or WhatsApp the booking instead.
+
+## Setup (one time)
+
+1. **Web3Forms:** go to web3forms.com, enter alikacars.baguio@gmail.com, and copy the access key they email you.
+2. **Semaphore:** sign up at semaphore.co, buy credits, and copy your API key from Account > API.
+3. In **Vercel > Project > Settings > Environment Variables**, add:
+   - `VITE_WEB3FORMS_KEY` = the Web3Forms access key
+   - `SEMAPHORE_API_KEY` = the Semaphore API key
+   - optional `SEMAPHORE_SENDER_NAME` = an approved sender name (e.g. ALIKA)
+   - optional `ALIKA_SMS_TO` = the phone that receives texts (default 09291805772)
+4. **Redeploy** (Deployments > ... > Redeploy) so the new variables take effect.
+
+For local testing, copy `.env.example` to `.env` and fill in the same values.
+
+## QR codes
+
+`qr-codes/` has QR codes that open the booking page: a printable card with the logo, plain red and black versions, and an SVG for print shops.
 
 Contact details live in `src/config.js`.

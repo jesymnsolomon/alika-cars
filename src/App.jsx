@@ -1,10 +1,30 @@
 import { useRef, useState } from 'react'
 import RangeCalendar, { countDays } from './components/RangeCalendar.jsx'
-import { BUSINESS } from './config.js'
+import { BUSINESS, WEB3FORMS_KEY } from './config.js'
 
 const PURPOSES = ['Baguio tour', 'Family trip', 'Out-of-town travel', 'Airport / terminal pickup', 'Business', 'Event or wedding', 'Other']
 
-const EMPTY = { fullName: '', city: '', contact: '', passengers: 1, purposes: [], details: '' }
+const EMPTY = { fullName: '', city: '', contact: '', passengers: 1, purposes: [], details: '', botcheck: '' }
+
+// Posts JSON and reports success, giving up after 10 seconds so nobody waits forever.
+async function postWithTimeout(url, data, ms = 10000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    })
+    const json = await res.json().catch(() => ({}))
+    return res.ok && (json.success === true || json.ok === true)
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 const formatDate = (d) =>
   d ? d.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''
@@ -66,6 +86,7 @@ export default function App() {
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState('idle') // idle | sending | done
   const [emailSent, setEmailSent] = useState(false)
+  const [smsSent, setSmsSent] = useState(false)
   const [message, setMessage] = useState('')
   const topRef = useRef(null)
 
@@ -112,38 +133,41 @@ export default function App() {
     setMessage(body)
     setStatus('sending')
 
-    let ok = false
-    // Never leave the customer waiting: give the email service 8 seconds at most.
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    try {
-      const res = await fetch(`https://formsubmit.co/ajax/${BUSINESS.email}`, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          _subject: `New booking: ${form.fullName.trim()} (${formatDate(start)} to ${formatDate(end)})`,
-          _template: 'table',
-          _captcha: 'false',
-          Name: form.fullName.trim(),
-          City: form.city.trim(),
-          Contact: form.contact.trim(),
-          'Start date': formatDate(start),
-          'End date': formatDate(end),
-          Days: countDays(start, end),
-          Passengers: form.passengers,
-          Purpose: form.purposes.join(', '),
-          'Travel details': form.details.trim(),
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      ok = res.ok && String(data.success) === 'true'
-    } catch {
-      ok = false
-    } finally {
-      clearTimeout(timer)
+    const fields = {
+      name: form.fullName.trim(),
+      city: form.city.trim(),
+      contact: form.contact.trim(),
+      start: formatDate(start),
+      end: formatDate(end),
+      days: countDays(start, end),
+      passengers: form.passengers,
+      purpose: form.purposes.join(', '),
+      details: form.details.trim(),
+      botcheck: form.botcheck,
     }
 
+    // Email (Web3Forms) and text (our /api/sms) go out at the same time.
+    const [emailOk, smsOk] = await Promise.all([
+      postWithTimeout('https://api.web3forms.com/submit', {
+        access_key: WEB3FORMS_KEY,
+        subject: `New booking: ${fields.name} (${fields.start} to ${fields.end})`,
+        from_name: 'Alika Booking Page',
+        botcheck: fields.botcheck,
+        Name: fields.name,
+        City: fields.city,
+        Contact: fields.contact,
+        'Start date': fields.start,
+        'End date': fields.end,
+        Days: fields.days,
+        Passengers: fields.passengers,
+        Purpose: fields.purpose,
+        'Travel details': fields.details,
+      }),
+      postWithTimeout('/api/sms', fields),
+    ])
+
+    setSmsSent(smsOk)
+    const ok = emailOk
     setEmailSent(ok)
     setStatus('done')
     topRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -171,9 +195,11 @@ export default function App() {
 
       <main className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
         {status === 'done' ? (
-          <SuccessScreen emailSent={emailSent} message={message} onReset={reset} />
+          <SuccessScreen emailSent={emailSent} smsSent={smsSent} message={message} onReset={reset} />
         ) : (
           <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            {/* Hidden from people; bots that fill it are ignored. */}
+            <input type="text" name="botcheck" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.botcheck} onChange={(e) => update('botcheck', e.target.value)} className="hidden" />
             <div className="grid gap-5 lg:grid-cols-2">
               <Card step="1" title="When do you need the car?" id="dates" required>
                 <RangeCalendar start={start} end={end} onChange={onDates} />
@@ -259,20 +285,22 @@ export default function App() {
   )
 }
 
-function SuccessScreen({ emailSent, message, onReset }) {
+function SuccessScreen({ emailSent, smsSent, message, onReset }) {
   const whatsapp = `https://wa.me/${BUSINESS.phone.replace('+', '')}?text=${encodeURIComponent(message)}`
+  const delivered = emailSent || smsSent
   return (
     <div className="mx-auto max-w-lg rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-stone-200 sm:p-8">
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand">
         <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7" /></svg>
       </div>
-      <h2 className="mt-4 text-2xl font-bold text-brand-ink">{emailSent ? 'Request sent!' : 'One last step'}</h2>
+      <h2 className="mt-4 text-2xl font-bold text-brand-ink">{delivered ? 'Booking request sent!' : 'One last step'}</h2>
       <p className="mt-2 text-stone-600">
-        {emailSent
-          ? 'We got your booking request by email. To make it faster, send it to our phone too, it only takes one tap.'
-          : 'We could not send the email right now. Please send your booking to our phone with one tap below.'}
+        {delivered
+          ? `Salamat! We received your request and will contact you at the number you gave us soon.`
+          : 'We could not send your request right now. Please send it to us with one tap below.'}
       </p>
 
+      {!delivered && (
       <div className="mt-6 space-y-3">
         <a href={smsLink(message)} className="flex h-14 w-full items-center justify-center rounded-2xl bg-brand text-lg font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark">
           Send via text message
@@ -281,6 +309,7 @@ function SuccessScreen({ emailSent, message, onReset }) {
           Send via WhatsApp
         </a>
       </div>
+      )}
 
       <details className="mt-6 text-left">
         <summary className="cursor-pointer text-sm font-medium text-stone-600">See your booking details</summary>
