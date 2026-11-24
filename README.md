@@ -17,6 +17,7 @@ React + Tailwind (Vite), hosted on Vercel.
 2. **Environment variables** (Settings > Environment Variables, tick Production):
    - `ADMIN_PASSWORD` = the password for /admin
    - `VITE_WEB3FORMS_KEY` = the Web3Forms access key
+   - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` = notification keys. Generate them once on your computer with `npx web-push generate-vapid-keys` and paste both in. Keep the private one secret.
 3. **Redeploy** (Deployments > ⋯ > Redeploy).
 4. Check https://alika-cars.vercel.app/api/status: everything should say `true`.
 
@@ -27,11 +28,17 @@ React + Tailwind (Vite), hosted on Vercel.
 
 The booking page installs as **Alika Cars**; the dashboard installs as **Alika Admin** with its own icon. They open full screen like apps.
 
+### Notifications for new bookings (iPhone, iOS 16.4 or newer)
+
+1. Add **/admin** to the home screen (above) and open **Alika Admin** from the home screen. Notifications only work from the home-screen app, not inside Safari.
+2. Sign in, tap **Turn on** in the Notifications card, and tap **Allow**.
+3. Tap **Send test** to check. Every new booking now pops up on the phone; tapping it opens the dashboard.
+
 ## Run locally
 
 ```bash
 npm install
-npm run dev        # the pages only; API calls won't work
+npm run dev        # the pages only (admin at /admin.html); API calls won't work
 npx vercel dev     # pages + API (needs `vercel link` and a .env, see .env.example)
 ```
 

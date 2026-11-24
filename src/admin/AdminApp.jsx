@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminRequest, getSavedKey, saveKey } from './api.js'
 import { dayCount, parseISO, shortDate, timeAgo, toISO, todayISO } from './dates.js'
+import { currentSubscription, disablePush, enablePush, isIOS, isStandalone, pushSupported, registerWorker, sendTestPush } from './push.js'
 
 const STATUS = {
   new: { label: 'New', badge: 'bg-amber-100 text-amber-800', pill: 'bg-amber-400 text-amber-950' },
@@ -49,6 +50,12 @@ function Icon({ name, className = 'h-5 w-5' }) {
       </>
     ),
     list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+    bell: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+      </>
+    ),
     logout: (
       <>
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -195,6 +202,8 @@ export default function AdminApp() {
           ))}
         </div>
 
+        <NotificationsCard adminKey={key} />
+
         {error && (
           <div className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200" role="alert">
             {error}
@@ -207,6 +216,91 @@ export default function AdminApp() {
           <ListView bookings={bookings} loading={loading} onUpdate={updateBooking} onDelete={deleteBooking} />
         )}
       </main>
+    </div>
+  )
+}
+
+function NotificationsCard({ adminKey }) {
+  // 'checking' | 'install' | 'unsupported' | 'off' | 'on' | 'blocked'
+  const [state, setState] = useState('checking')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (isIOS() && !isStandalone()) return !cancelled && setState('install')
+      if (!pushSupported()) return !cancelled && setState('unsupported')
+      await registerWorker()
+      if (Notification.permission === 'denied') return !cancelled && setState('blocked')
+      const sub = await currentSubscription()
+      if (!cancelled) setState(sub && Notification.permission === 'granted' ? 'on' : 'off')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const run = async (action, done) => {
+    setBusy(true)
+    setMessage('')
+    try {
+      await action()
+      done?.()
+    } catch (err) {
+      setMessage(err.message)
+      if (Notification.permission === 'denied') setState('blocked')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (state === 'checking' || state === 'unsupported') return null
+
+  const box = 'mb-4 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-stone-200'
+
+  if (state === 'install') {
+    return (
+      <div className={box}>
+        <p className="flex items-center gap-2 font-semibold text-brand-ink"><Icon name="bell" className="h-5 w-5 text-brand" /> Get notified of new bookings</p>
+        <p className="mt-1 text-sm text-stone-600">In Safari, tap <strong>Share</strong> › <strong>Add to Home Screen</strong>, then open <strong>Alika Admin</strong> from your home screen to turn on notifications.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={box}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 font-semibold text-brand-ink">
+            <Icon name="bell" className="h-5 w-5 text-brand" />
+            Notifications {state === 'on' ? 'on' : state === 'blocked' ? 'blocked' : 'off'}
+          </p>
+          <p className="mt-0.5 text-sm text-stone-500">
+            {state === 'on'
+              ? 'This phone gets an alert for every new booking.'
+              : state === 'blocked'
+                ? 'Allow them in iPhone Settings › Notifications › Alika Admin.'
+                : 'Get an alert on this phone for every new booking.'}
+          </p>
+        </div>
+        {state === 'off' && (
+          <button type="button" disabled={busy} onClick={() => run(() => enablePush(adminKey), () => setState('on'))} className="h-11 shrink-0 rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-60">
+            {busy ? 'Turning on...' : 'Turn on'}
+          </button>
+        )}
+      </div>
+      {state === 'on' && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" disabled={busy} onClick={() => run(() => sendTestPush(adminKey), () => setMessage('Test sent. It should arrive in a few seconds.'))} className="h-11 rounded-xl border-2 border-brand text-sm font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-60">
+            Send test
+          </button>
+          <button type="button" disabled={busy} onClick={() => run(() => disablePush(adminKey), () => setState('off'))} className="h-11 rounded-xl text-sm font-semibold text-stone-600 ring-1 ring-stone-300 transition hover:bg-stone-50 disabled:opacity-60">
+            Turn off
+          </button>
+        </div>
+      )}
+      {message && <p className="mt-2 text-sm text-stone-600" role="status">{message}</p>}
     </div>
   )
 }

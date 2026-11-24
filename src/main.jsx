@@ -1,28 +1,18 @@
-import { StrictMode, Suspense, lazy } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { getSavedKey } from './admin/api.js'
 
-const AdminApp = lazy(() => import('./admin/AdminApp.jsx'))
-
-const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin'
-
-if (isAdmin) {
-  // Its own name and icon when added to the home screen.
-  document.getElementById('manifest-link')?.setAttribute('href', '/admin.webmanifest')
-  document.getElementById('apple-title')?.setAttribute('content', 'Alika Admin')
-  document.getElementById('apple-icon')?.setAttribute('href', '/admin-apple-touch-icon.png')
-  document.title = 'Alika Admin'
-}
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    {isAdmin ? (
-      <Suspense fallback={<div className="min-h-dvh bg-brand" />}>
-        <AdminApp />
-      </Suspense>
-    ) : (
+// If the owner opens a home-screen app that started on the booking page,
+// send them to the dashboard. Customers never have an admin key, so they stay here.
+const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+if (standalone && getSavedKey()) {
+  window.location.replace('/admin')
+} else {
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
       <App />
-    )}
-  </StrictMode>,
-)
+    </StrictMode>,
+  )
+}

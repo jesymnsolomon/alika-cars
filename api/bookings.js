@@ -5,6 +5,7 @@
 //   DELETE /api/bookings?id=...   admin: delete a booking
 import { randomUUID } from 'node:crypto'
 import { redis, redisReady, isAdmin, readBody } from './_redis.js'
+import { notifyAdmins } from './_push.js'
 
 const KEY = 'bookings'
 const STATUSES = ['new', 'confirmed', 'completed', 'cancelled']
@@ -108,5 +109,24 @@ async function create(req, res) {
   }
 
   await redis('HSET', KEY, booking.id, JSON.stringify(booking))
+
+  // Ping the owner's phone. A notification problem never blocks the booking.
+  try {
+    const range = booking.start === booking.end ? shortDay(booking.start) : `${shortDay(booking.start)} – ${shortDay(booking.end)}`
+    await notifyAdmins({
+      title: 'New booking request',
+      body: `${booking.name} · ${range} · ${booking.passengers} pax`,
+      url: '/admin',
+      tag: booking.id,
+    })
+  } catch (err) {
+    console.error('Notification failed', err)
+  }
+
   return res.status(200).json({ ok: true, id: booking.id })
+}
+
+function shortDay(iso) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
